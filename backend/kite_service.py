@@ -459,14 +459,30 @@ class KiteManager:
         """
         if not self.is_demo and self.kite:
             try:
-                raw_candles = self.kite.historical_data(
-                    instrument_token=instrument_token,
-                    from_date=from_date,
-                    to_date=to_date,
-                    interval=interval,
-                    continuous=continuous,
-                    oi=oi
-                )
+                try:
+                    raw_candles = self.kite.historical_data(
+                        instrument_token=instrument_token,
+                        from_date=from_date,
+                        to_date=to_date,
+                        interval=interval,
+                        continuous=continuous,
+                        oi=oi
+                    )
+                except Exception as ssl_err:
+                    if any(err_kw in str(ssl_err) for err_kw in ["SSLError", "CERTIFICATE_VERIFY_FAILED", "SSLCertVerificationError"]):
+                        print(f"[SSL Retry]: Disabling SSL verification for local historical requests.")
+                        self.kite = KiteConnect(api_key=self.api_key, access_token=self.access_token, disable_ssl=True)
+                        raw_candles = self.kite.historical_data(
+                            instrument_token=instrument_token,
+                            from_date=from_date,
+                            to_date=to_date,
+                            interval=interval,
+                            continuous=continuous,
+                            oi=oi
+                        )
+                    else:
+                        raise ssl_err
+
                 formatted_candles = []
                 for c in raw_candles:
                     candle_dict = {
@@ -539,12 +555,14 @@ class KiteManager:
         to_date: str,
         short_sma: int = 10,
         long_sma: int = 40,
+        stop_loss_pct: float = 0.0,
+        take_profit_pct: float = 0.0,
         initial_capital: float = 500000.0
     ) -> Dict[str, Any]:
         """
-        Executes SMA crossover backtest on daily historical candles.
+        Executes SMA crossover backtest with optional Stop Loss and Take Profit risk controls.
         Validates parameters, calculates SMAs ignoring NaN warmup rows, and executes
-        trades at next-day open price to eliminate lookahead bias.
+        trades at next-day open price or intra-candle SL/TP thresholds to eliminate lookahead bias.
         """
         import math
 
@@ -569,13 +587,11 @@ class KiteManager:
 
         candles_raw = hist_res.get("candles", [])
         if len(candles_raw) < long_sma:
-            # Generate sufficient synthetic daily candles if requested date range is short
             num_candles = max(120, long_sma + 60)
             base_p = 250.0 if "NIFTYBEES" in sym_clean else 1800.0 if "INFY" in sym_clean else 3000.0
             start_dt = datetime.datetime.now() - datetime.timedelta(days=num_candles + 30)
             candles_raw = []
             curr = base_p
-            # Generate a realistic trending price wave to produce signals
             for i in range(num_candles):
                 dt_str = (start_dt + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
                 wave = math.sin(i / 8.0) * 18.0 + random.uniform(-2, 2)
@@ -600,13 +616,11 @@ class KiteManager:
 
         for i, c in enumerate(candles_raw):
             c_dict = dict(c)
-            # Short SMA
             if i >= short_sma - 1:
                 c_dict["short_sma"] = round(sum(closes[i - short_sma + 1 : i + 1]) / short_sma, 2)
             else:
                 c_dict["short_sma"] = None
 
-            # Long SMA
             if i >= long_sma - 1:
                 c_dict["long_sma"] = round(sum(closes[i - long_sma + 1 : i + 1]) / long_sma, 2)
             else:
@@ -614,19 +628,25 @@ class KiteManager:
 
             candles.append(c_dict)
 
-        # Backtest Simulation with Next-Day Open Execution
+        # Simulation
         cash = float(initial_capital)
         position = None # {"entry_date", "entry_price", "quantity", "cost"}
         pending_signal = None # "BUY" or "SELL"
+        pending_exit_reason = None
         trade_log = []
         buy_markers = []
         sell_markers = []
         portfolio_history = []
 
+        stop_loss_count = 0
+        take_profit_count = 0
+        sma_cross_count = 0
+
         for i in range(len(candles)):
             curr_c = candles[i]
+            executed_sl_tp_this_candle = False
             
-            # 1. Execute pending signal at current candle open
+            # 1. Execute pending signal from previous candle at current candle open
             if pending_signal == "BUY" and position is None:
                 exec_price = curr_c["open"]
                 qty = int(cash // exec_price)
@@ -655,6 +675,9 @@ class KiteManager:
                 pnl = round(revenue - position["cost"], 2)
                 pnl_pct = round((pnl / position["cost"]) * 100, 2)
                 cash = round(cash + revenue, 2)
+                reason = pending_exit_reason or "SMA Cross Down"
+                if reason == "SMA Cross Down":
+                    sma_cross_count += 1
                 
                 trade_log.append({
                     "entry_date": position["entry_date"],
@@ -663,39 +686,97 @@ class KiteManager:
                     "exit_price": exec_price,
                     "quantity": qty,
                     "pnl": pnl,
-                    "pnl_pct": pnl_pct
+                    "pnl_pct": pnl_pct,
+                    "exit_reason": reason
                 })
                 sell_markers.append({
                     "date": curr_c["date"],
                     "price": exec_price,
                     "quantity": qty,
                     "pnl": pnl,
+                    "exit_reason": reason,
                     "candle_index": i
                 })
                 position = None
                 pending_signal = None
+                pending_exit_reason = None
+                executed_sl_tp_this_candle = True
 
-            # 2. Evaluate Crossover Signal at current candle close
-            if i >= 1:
+            # 2. Check Intra-Candle Stop Loss & Take Profit if position is active
+            if position is not None and not executed_sl_tp_this_candle:
+                entry_price = position["entry_price"]
+                sl_price = round(entry_price * (1.0 - stop_loss_pct / 100.0), 2) if stop_loss_pct > 0 else None
+                tp_price = round(entry_price * (1.0 + take_profit_pct / 100.0), 2) if take_profit_pct > 0 else None
+
+                hit_sl = sl_price is not None and curr_c["low"] <= sl_price
+                hit_tp = tp_price is not None and curr_c["high"] >= tp_price
+
+                if hit_sl or hit_tp:
+                    # Apply Stop-Loss first if both hit on same candle (conservative assumption)
+                    if hit_sl and hit_tp:
+                        exec_price = sl_price
+                        reason = "Stop Loss"
+                        stop_loss_count += 1
+                    elif hit_sl:
+                        exec_price = sl_price
+                        reason = "Stop Loss"
+                        stop_loss_count += 1
+                    else:
+                        exec_price = tp_price
+                        reason = "Take Profit"
+                        take_profit_count += 1
+
+                    qty = position["quantity"]
+                    revenue = round(qty * exec_price, 2)
+                    pnl = round(revenue - position["cost"], 2)
+                    pnl_pct = round((pnl / position["cost"]) * 100, 2)
+                    cash = round(cash + revenue, 2)
+
+                    trade_log.append({
+                        "entry_date": position["entry_date"],
+                        "entry_price": position["entry_price"],
+                        "exit_date": curr_c["date"],
+                        "exit_price": exec_price,
+                        "quantity": qty,
+                        "pnl": pnl,
+                        "pnl_pct": pnl_pct,
+                        "exit_reason": reason
+                    })
+                    sell_markers.append({
+                        "date": curr_c["date"],
+                        "price": exec_price,
+                        "quantity": qty,
+                        "pnl": pnl,
+                        "exit_reason": reason,
+                        "candle_index": i
+                    })
+                    position = None
+                    pending_signal = None
+                    pending_exit_reason = None
+                    executed_sl_tp_this_candle = True
+
+            # 3. Evaluate Crossover Signal at current candle close
+            if i >= 1 and not executed_sl_tp_this_candle:
                 prev_short = candles[i - 1]["short_sma"]
                 prev_long = candles[i - 1]["long_sma"]
                 curr_short = curr_c["short_sma"]
                 curr_long = curr_c["long_sma"]
 
                 if prev_short is not None and prev_long is not None and curr_short is not None and curr_long is not None:
-                    # Bullish Crossover (Short crosses above Long)
+                    # Bullish Crossover
                     if prev_short <= prev_long and curr_short > curr_long:
                         if position is None:
                             pending_signal = "BUY"
                             curr_c["signal"] = "BUY_SIGNAL"
 
-                    # Bearish Crossover (Short crosses below Long)
+                    # Bearish Crossover
                     elif prev_short >= prev_long and curr_short < curr_long:
                         if position is not None:
                             pending_signal = "SELL"
+                            pending_exit_reason = "SMA Cross Down"
                             curr_c["signal"] = "SELL_SIGNAL"
 
-            # 3. Record Portfolio State
+            # 4. Record Portfolio State
             pos_val = round(position["quantity"] * curr_c["close"], 2) if position else 0.0
             total_val = round(cash + pos_val, 2)
             curr_c["portfolio_value"] = total_val
@@ -708,7 +789,7 @@ class KiteManager:
                 "close": curr_c["close"]
             })
 
-        # Calculate Summary Metrics
+        # Summary Metrics
         completed_trades = len(trade_log)
         winning_trades = len([t for t in trade_log if t["pnl"] > 0])
         losing_trades = len([t for t in trade_log if t["pnl"] <= 0])
@@ -722,6 +803,8 @@ class KiteManager:
             "symbol": symbol,
             "short_sma": short_sma,
             "long_sma": long_sma,
+            "stop_loss_pct": stop_loss_pct,
+            "take_profit_pct": take_profit_pct,
             "initial_capital": initial_capital,
             "final_portfolio_value": final_portfolio_value,
             "total_pnl": total_pnl,
@@ -733,8 +816,17 @@ class KiteManager:
             "position_status": position_status
         }
 
+        risk_metadata = {
+            "stop_loss_pct": stop_loss_pct,
+            "take_profit_pct": take_profit_pct,
+            "stop_loss_exits": stop_loss_count,
+            "take_profit_exits": take_profit_count,
+            "sma_cross_exits": sma_cross_count
+        }
+
         res = {
             "metrics": metrics,
+            "risk_metadata": risk_metadata,
             "candles": candles,
             "buy_markers": buy_markers,
             "sell_markers": sell_markers,
@@ -744,6 +836,7 @@ class KiteManager:
             "raw_response": {
                 "data_source": hist_res.get("data_source", "SIMULATED_SANDBOX"),
                 "metrics": metrics,
+                "risk_metadata": risk_metadata,
                 "trade_log": trade_log,
                 "buy_count": len(buy_markers),
                 "sell_count": len(sell_markers)
@@ -752,6 +845,31 @@ class KiteManager:
         if "warning_note" in hist_res:
             res["warning_note"] = hist_res["warning_note"]
         return res
+
+    def run_optimization(
+        self,
+        symbol: str,
+        from_date: str,
+        to_date: str,
+        short_sma: int = 10,
+        long_sma: int = 40,
+        stop_loss_pct: float = 1.0,
+        take_profit_pct: float = 5.0,
+        initial_capital: float = 500000.0
+    ) -> Dict[str, Any]:
+        """
+        Extends SMA backtest with Stop Loss and Take Profit risk controls.
+        """
+        return self.run_sma_backtest(
+            symbol=symbol,
+            from_date=from_date,
+            to_date=to_date,
+            short_sma=short_sma,
+            long_sma=long_sma,
+            stop_loss_pct=stop_loss_pct,
+            take_profit_pct=take_profit_pct,
+            initial_capital=initial_capital
+        )
 
 # Global singleton manager instance
 kite_manager = KiteManager()

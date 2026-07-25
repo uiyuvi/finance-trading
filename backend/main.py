@@ -170,5 +170,31 @@ def run_sma_backtest(req: SmaBacktestRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+class OptimizationRequest(BaseModel):
+    symbol: Optional[str] = "NIFTYBEES"
+    from_date: str
+    to_date: str
+    short_sma: Optional[int] = 10
+    long_sma: Optional[int] = 40
+    stop_loss_pct: Optional[float] = 1.0
+    take_profit_pct: Optional[float] = 5.0
+    initial_capital: Optional[float] = 500000.0
+
+@app.post("/api/backtest/optimization")
+def run_optimization(req: OptimizationRequest):
+    try:
+        return kite_manager.run_optimization(
+            symbol=req.symbol or "NIFTYBEES",
+            from_date=req.from_date,
+            to_date=req.to_date,
+            short_sma=req.short_sma or 10,
+            long_sma=req.long_sma or 40,
+            stop_loss_pct=req.stop_loss_pct if req.stop_loss_pct is not None else 1.0,
+            take_profit_pct=req.take_profit_pct if req.take_profit_pct is not None else 5.0,
+            initial_capital=req.initial_capital or 500000.0
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

@@ -8,6 +8,7 @@ import SnapshotTab from '../tabs/SnapshotTab';
 import RealtimeTab from '../tabs/RealtimeTab';
 import HistoricalTab from '../tabs/HistoricalTab';
 import SmaBacktestTab from '../tabs/SmaBacktestTab';
+import OptimizationTab from '../tabs/OptimizationTab';
 
 export default function Dashboard({ userProfile, isDemo, onLogout }) {
   const [activeTab, setActiveTab] = useState('user');
@@ -26,6 +27,8 @@ export default function Dashboard({ userProfile, isDemo, onLogout }) {
         return <HistoricalTab />;
       case 'sma_backtest':
         return <SmaBacktestTab />;
+      case 'optimization':
+        return <OptimizationTab />;
       default:
         return <UserTab />;
     }

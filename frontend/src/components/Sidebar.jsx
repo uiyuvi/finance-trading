@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Database, Layers, Activity, LineChart, TrendingUp } from 'lucide-react';
+import { User, Database, Layers, Activity, LineChart, TrendingUp, Sliders } from 'lucide-react';
 
 const TABS = [
   { id: 'user', label: 'User', icon: User, desc: 'Profile & Account Capabilities' },
@@ -8,6 +8,7 @@ const TABS = [
   { id: 'realtime', label: 'Realtime', icon: Activity, desc: 'WebSocket Live Tick Stream' },
   { id: 'historical', label: 'Historical', icon: LineChart, desc: 'Candlestick Chart & OHLCV' },
   { id: 'sma_backtest', label: 'SMA Backtest', icon: TrendingUp, desc: '10/40 Moving Avg Crossover' },
+  { id: 'optimization', label: 'Optimization', icon: Sliders, desc: 'SL & TP Risk Controls' },
 ];
 
 export default function Sidebar({ activeTab, setActiveTab }) {
