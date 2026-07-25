@@ -2,6 +2,17 @@
 
 A compact, high-performance React + Vite frontend and Python FastAPI backend for exploring Zerodha Kite Connect API features, built in the Zerodha Varsity visual theme (calm light-blue accents, clean white cards, crisp typography, and professional work-focused spacing).
 
+> [!NOTE]
+> 🤖 **Pure AI-Generated Codebase**
+> This entire application was built **100% autonomously using Google Antigravity powered by Gemini 3.6 Flash**, generated purely from the prompt specifications in `Main Dashboard Prompts.docx`. **No code was written manually.**
+
+---
+
+## 🎓 Credits & Acknowledgments
+
+- **Zerodha Varsity**: Grateful acknowledgment and credit to **Zerodha Varsity** for their free, world-class financial education modules. This project was created while learning trading concepts, market mechanics, and quantitative analysis through Varsity's free courses. The UI visual style, calm blue theme, and educational structure pay homage to Zerodha Varsity.
+- **Zerodha Kite Connect**: Built on top of the official Zerodha `kiteconnect` Python SDK and `KiteTicker` WebSocket live streaming library.
+
 ---
 
 ## Features & Modules
@@ -13,7 +24,7 @@ A compact, high-performance React + Vite frontend and Python FastAPI backend for
    - Saves ONLY `api_key` and `access_token` in `backend/session.json`.
    - Never exposes access token to the browser.
    - Persists session locally across refreshes (`GET /api/session`).
-   - Includes Demo Sandbox Mode for testing without active live API credentials.
+   - Includes **Demo Sandbox Mode** for testing without active live API credentials.
 
 2. **7 Learning Modules**:
    - **User Tab**: Calls `kite.profile()` to display User Name, User ID, Products, and Exchanges.
@@ -26,7 +37,7 @@ A compact, high-performance React + Vite frontend and Python FastAPI backend for
 
 ---
 
-## Security Audit & GitHub Readiness
+## Security Audit
 
 > [!IMPORTANT]
 > **No hardcoded API credentials, secrets, or access tokens exist in the codebase.**
@@ -34,16 +45,6 @@ A compact, high-performance React + Vite frontend and Python FastAPI backend for
 - All API credentials (`API Key`, `API Secret`, `Request Token`) are submitted dynamically through the UI.
 - Local sessions are stored in `backend/session.json` which is strictly ignored by `.gitignore`.
 - Run-time artifacts, virtual environments (`venv`), `node_modules`, and build folders are git-ignored.
-
-### Pushing to GitHub
-```bash
-git init
-git add .
-git commit -m "feat: implement Prompt 3 strategy optimization with stop-loss and take-profit risk controls"
-git branch -M main
-git remote add origin https://github.com/uiyuvi/finance-trading.git
-git push -u origin main
-```
 
 ---
 
@@ -78,7 +79,7 @@ npm run dev
 
 ---
 
-### macOS Setup & Run
+### macOS / Linux Setup & Run
 
 #### 1. Backend Setup
 ```bash
@@ -99,12 +100,13 @@ npm run dev
 
 ---
 
-## Project Structure & Learning Modules
+## Project Structure
 
 ```
 dashboard-prod/
 ├── .gitignore               # Protects session.json, node_modules, & secrets
-├── README.md                # Project documentation & user guide
+├── README.md                # Project documentation & credits
+├── Main Dashboard Prompts.docx # Prompt specifications for AI generation
 ├── backend/
 │   ├── main.py              # FastAPI endpoints & models (SMA backtest & risk optimization)
 │   ├── kite_service.py      # KiteConnect SDK wrapper, SMA backtest, SL/TP risk engine & session logic
