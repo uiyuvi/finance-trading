@@ -60,9 +60,18 @@ export default function HistoricalTab() {
       {/* Top Banner */}
       <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
             <LineChart className="w-5 h-5 text-blue-600" />
             <h2 className="text-lg font-bold text-slate-900">Historical Candles & Chart</h2>
+            {data?.data_source && (
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
+                data.data_source === 'ZERODHA_LIVE_API' 
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                  : 'bg-amber-100 text-amber-800 border border-amber-300'
+              }`}>
+                {data.data_source === 'ZERODHA_LIVE_API' ? '🟢 Zerodha Live API' : '⚡ Simulated Sandbox'}
+              </span>
+            )}
           </div>
           <p className="text-xs text-slate-500 mt-1">
             Historical OHLCV candle data retrieved via <code className="bg-slate-100 px-1 py-0.5 rounded text-blue-700 font-mono">kite.historical_data()</code>.
@@ -98,6 +107,13 @@ export default function HistoricalTab() {
           </button>
         </div>
       </div>
+
+      {data?.warning_note && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start space-x-2">
+          <span className="font-bold shrink-0">ℹ️ Notice:</span>
+          <span>{data.warning_note}</span>
+        </div>
+      )}
 
       {/* Control Form Bar */}
       <div className="varsity-card p-5 space-y-4">

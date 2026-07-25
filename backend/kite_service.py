@@ -327,10 +327,37 @@ class KiteManager:
         ]
         self.instruments_cache = sample_data
 
+    def resolve_symbol_token(self, symbol: str) -> int:
+        """
+        Dynamically looks up real Zerodha instrument_token for a tradingsymbol from master list.
+        E.g. 'NSE:NIFTYBEES' -> 8958210, 'NSE:INFY' -> 256265, 'NSE:SBIN' -> 779521
+        """
+        clean = symbol.upper().strip()
+        if ":" in clean:
+            _, clean = clean.split(":", 1)
+        
+        # Check instruments cache
+        if self.instruments_cache:
+            for item in self.instruments_cache:
+                if item.get("tradingsymbol", "").upper() == clean:
+                    return item.get("instrument_token")
+        
+        # Defaults if cache is initializing
+        defaults = {
+            "INFY": 256265,
+            "RELIANCE": 738561,
+            "HDFCBANK": 341249,
+            "NIFTYBEES": 8958210,
+            "TCS": 2953217,
+            "SBIN": 779521
+        }
+        return defaults.get(clean, 8958210)
+
     def get_snapshot(self, symbols: List[str]) -> Dict[str, Any]:
         """
         Fetches quote-style snapshot data through backend.
-        Handles missing tokens, failed symbols, loading states, and Kite API errors gracefully.
+        In Live mode: calls Zerodha quote API directly. Raises exception if failed.
+        In Demo mode: generates simulated quotes.
         """
         if not symbols:
             return {"quotes": {}, "raw_response": {}, "error": "No symbols specified."}
@@ -361,11 +388,11 @@ class KiteManager:
                         "sell_quantity": q.get("sell_quantity"),
                         "depth": q.get("depth", {})
                     }
-                return {"quotes": cleaned_quotes, "raw_response": raw_quotes}
+                return {"quotes": cleaned_quotes, "raw_response": raw_quotes, "data_source": "ZERODHA_LIVE_API"}
             except Exception as e:
-                print(f"[Snapshot Live Fetch Error]: {e}. Using simulated quote response for requested symbols.")
+                raise Exception(f"Zerodha Live Quote Error: {str(e)}")
 
-        # Fallback / Demo quote generation
+        # Sandbox Mode (is_demo == True)
         cleaned_quotes = {}
         raw_quotes = {}
         for sym in formatted_symbols:
@@ -422,12 +449,13 @@ class KiteManager:
             }
             raw_quotes[sym] = q_obj
 
-        return {"quotes": cleaned_quotes, "raw_response": raw_quotes}
+        return {"quotes": cleaned_quotes, "raw_response": raw_quotes, "data_source": "SIMULATED_SANDBOX"}
 
     def get_historical(self, instrument_token: int, from_date: str, to_date: str, interval: str, continuous: bool = False, oi: bool = False) -> Dict[str, Any]:
         """
         Fetches historical candles from Kite backend API.
-        Returns clean table (last 10 rows), full interactive candles array, and raw API response.
+        In Live mode: calls Zerodha historical_data API directly. Raises exception if failed.
+        In Sandbox mode: generates simulated candles for learning.
         """
         if not self.is_demo and self.kite:
             try:
@@ -457,12 +485,14 @@ class KiteManager:
                     "total_candles": len(formatted_candles),
                     "last_10_rows": formatted_candles[-10:],
                     "candles": formatted_candles,
-                    "raw_response": raw_candles
+                    "raw_response": raw_candles,
+                    "data_source": "ZERODHA_LIVE_API"
                 }
             except Exception as e:
-                print(f"[Historical Fetch Warning]: {e}. Using calculated OHLCV generator.")
+                # In Live mode, raise actual Zerodha API exception
+                raise Exception(f"Zerodha Live Historical API Error: {str(e)}. (Note: Zerodha requires an active Historical Data API subscription ($2000/mo) on developer.kite.trade).")
 
-        # Synthetic/Mock realistic candle generator for standard learning visualizer
+        # Sandbox Mode (is_demo == True)
         num_candles = 60
         base_p = 1800.0 if instrument_token == 256265 else 24500.0 if instrument_token == 8958210 else 1500.0
         start_dt = datetime.datetime.now() - datetime.timedelta(days=num_candles)
@@ -498,7 +528,8 @@ class KiteManager:
             "total_candles": len(candles),
             "last_10_rows": candles[-10:],
             "candles": candles,
-            "raw_response": raw_list
+            "raw_response": raw_list,
+            "data_source": "SIMULATED_SANDBOX"
         }
 
     def run_sma_backtest(
@@ -522,15 +553,9 @@ class KiteManager:
         if initial_capital <= 0:
             raise Exception("Initial capital must be greater than zero.")
 
-        # Determine instrument token
+        # Determine instrument token dynamically from master list
         sym_clean = symbol.upper().replace("NSE:", "").replace("NFO:", "")
-        token = 8958210 # Default NIFTYBEES / NIFTY
-        if "INFY" in sym_clean:
-            token = 256265
-        elif "RELIANCE" in sym_clean:
-            token = 738561
-        elif "HDFCBANK" in sym_clean:
-            token = 341249
+        token = self.resolve_symbol_token(symbol)
 
         # Fetch daily candles
         hist_res = self.get_historical(
@@ -708,20 +733,25 @@ class KiteManager:
             "position_status": position_status
         }
 
-        return {
+        res = {
             "metrics": metrics,
             "candles": candles,
             "buy_markers": buy_markers,
             "sell_markers": sell_markers,
             "trade_log": trade_log,
             "portfolio_history": portfolio_history,
+            "data_source": hist_res.get("data_source", "SIMULATED_SANDBOX"),
             "raw_response": {
+                "data_source": hist_res.get("data_source", "SIMULATED_SANDBOX"),
                 "metrics": metrics,
                 "trade_log": trade_log,
                 "buy_count": len(buy_markers),
                 "sell_count": len(sell_markers)
             }
         }
+        if "warning_note" in hist_res:
+            res["warning_note"] = hist_res["warning_note"]
+        return res
 
 # Global singleton manager instance
 kite_manager = KiteManager()

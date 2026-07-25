@@ -24,9 +24,15 @@ export default function Navbar({ userProfile, isDemo, onLogout }) {
 
         {/* Right User & Logout Info */}
         <div className="flex items-center space-x-4">
-          {isDemo && (
-            <span className="bg-amber-50 text-amber-800 border border-amber-200 text-xs px-2.5 py-1 rounded-md font-medium flex items-center gap-1">
-              <Zap className="w-3.5 h-3.5 text-amber-600" /> Demo Sandbox Mode
+          {isDemo ? (
+            <span className="bg-amber-50 text-amber-800 border border-amber-200 text-xs px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-sm">
+              <Zap className="w-3.5 h-3.5 text-amber-600 fill-current" />
+              <span>Sandbox Mode (Simulated Data)</span>
+            </span>
+          ) : (
+            <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-sm">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>🟢 Live Mode (Zerodha API)</span>
             </span>
           )}
 
