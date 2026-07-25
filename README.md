@@ -15,13 +15,14 @@ A compact, high-performance React + Vite frontend and Python FastAPI backend for
    - Persists session locally across refreshes (`GET /api/session`).
    - Includes Demo Sandbox Mode for testing without active live API credentials.
 
-2. **6 Learning Modules**:
+2. **7 Learning Modules**:
    - **User Tab**: Calls `kite.profile()` to display User Name, User ID, Products, and Exchanges.
    - **Instruments Tab**: Searchable/filterable explorer for exchange (combining NFO under NSE, BFO under BSE), underlying, stock/symbol, instrument type (EQ/FUT/CE/PE), and expiry. Includes dual clean table & raw API views.
    - **Snapshot Tab**: Multi-symbol quote snapshot (`kite.quote()`) with clean data cards, market depth (bids/asks), and raw API response view.
    - **Realtime Tab**: Live WebSocket stream controller (`KiteTicker`) with real-time incoming tick cards, status indicators, and raw payload viewer.
    - **Historical Tab**: Interactive OHLCV Candlestick Chart (with hover tooltip), 10-row candle table, interval selection, date range, continuous/OI modes, and full API JSON view (`kite.historical_data()`).
    - **SMA Backtest Tab**: 10/40 Simple Moving Average crossover backtest engine (`POST /api/backtest/sma`) with next-day open executions (zero lookahead bias), interactive OHLCV chart with dual SMA lines, Buy/Sell markers, metric cards, trade log table, and raw response viewer.
+   - **Optimization Tab**: Advanced strategy risk optimization engine (`POST /api/backtest/optimization`). Extends SMA Backtest with configurable **Stop-Loss %** and **Take-Profit %** intra-candle risk controls, detailed exit reason tagging (`Stop Loss`, `Take Profit`, `SMA Crossover Exit`), win-rate analysis, and dual interactive chart & raw API views.
 
 ---
 
@@ -38,9 +39,9 @@ A compact, high-performance React + Vite frontend and Python FastAPI backend for
 ```bash
 git init
 git add .
-git commit -m "Initial commit: Zerodha Kite Connect Learning Dashboard with SMA Backtest"
+git commit -m "feat: implement Prompt 3 strategy optimization with stop-loss and take-profit risk controls"
 git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/zerodha-kite-dashboard.git
+git remote add origin https://github.com/uiyuvi/finance-trading.git
 git push -u origin main
 ```
 
@@ -98,14 +99,15 @@ npm run dev
 
 ---
 
-## Project Structure & Adding New Tabs
+## Project Structure & Learning Modules
 
 ```
 dashboard-prod/
 ├── .gitignore               # Protects session.json, node_modules, & secrets
+├── README.md                # Project documentation & user guide
 ├── backend/
-│   ├── main.py              # FastAPI endpoints & models
-│   ├── kite_service.py      # KiteConnect SDK wrapper, SMA backtest & session logic
+│   ├── main.py              # FastAPI endpoints & models (SMA backtest & risk optimization)
+│   ├── kite_service.py      # KiteConnect SDK wrapper, SMA backtest, SL/TP risk engine & session logic
 │   ├── ticker_service.py    # KiteTicker WebSocket streamer
 │   ├── requirements.txt     # Python dependencies
 │   └── session.json         # Local session file (git-ignored)
@@ -113,7 +115,7 @@ dashboard-prod/
     ├── src/
     │   ├── components/      # Shared UI (Navbar, Sidebar, JsonView, Candlestick, SmaChart)
     │   ├── pages/           # Login & Dashboard page containers
-    │   └── tabs/            # Tab views (User, Instruments, Snapshot, Realtime, Historical, SmaBacktest)
+    │   └── tabs/            # Tab views (User, Instruments, Snapshot, Realtime, Historical, SmaBacktest, Optimization)
     ├── index.html           # HTML template with Tailwind CSS v3 engine
     ├── index.css            # Varsity CSS layout & tokens
     └── vite.config.js       # Vite dev proxy configuration
